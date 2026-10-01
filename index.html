@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>寶可夢動態資訊看板 - Pokédex Analytics Dashboard</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            pokeRed: '#EE1515',
+            pokeDark: '#121212',
+            pokeCard: '#1E1E2E',
+            pokeCardHover: '#2A2A3D',
+          },
+          fontFamily: {
+            sans: ['Inter', 'Microsoft JhengHei', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    body {
+      background-color: #0F0F1A;
+      color: #E2E8F0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #12121D;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    .card-glow:hover {
+      box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.35);
+    }
+
+    .glass-nav {
+      background: rgba(18, 18, 29, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-rose-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-40 glass-nav transition-all">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center space-x-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-950/50 transform hover:rotate-12 transition-transform duration-300">
+          <span class="font-bold text-xl text-white">⚡</span>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            Pokédex <span class="text-rose-500">Live</span>
+          </h1>
+          <p class="text-xs text-slate-400 flex items-center space-x-1.5">
+            <span>寶可夢即時數據看板</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Data Source Attribution Badge & Status -->
+      <div class="hidden md:flex items-center space-x-4">
+        <a href="https://pokeapi.co/" target="_blank" rel="noopener noreferrer" 
+           class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-xs font-medium text-slate-300 transition-colors">
+          <i class="fa-solid fa-database text-rose-400"></i>
+          <span>資料來源：<strong class="text-white hover:underline">PokeAPI.co</strong></span>
+          <i class="fa-solid fa-arrow-up-right-from-square text-[10px] opacity-70"></i>
+        </a>
+
+        <!-- Live API Status Pillar -->
+        <div id="api-status-pill" class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-950/50 border border-emerald-800/50 text-xs text-emerald-300">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span id="api-status-text">API 連線正常</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- Quick Analytics Stats Overview -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur">
+        <div class="text-xs font-medium text-slate-400 flex items-center justify-between">
+          <span>目前顯示總數</span>
+          <i class="fa-solid fa-list-ol text-slate-500"></i>
+        </div>
+        <div id="stat-total-count" class="text-2xl font-bold text-white mt-1">--</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">即時過濾資料筆數</div>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur">
+        <div class="text-xs font-medium text-slate-400 flex items-center justify-between">
+          <span>屬性分類統計</span>
+          <i class="fa-solid fa-layer-group text-slate-500"></i>
+        </div>
+        <div id="stat-active-type" class="text-2xl font-bold text-rose-400 mt-1">全部 (18)</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">已選擇之屬性類別</div>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur">
+        <div class="text-xs font-medium text-slate-400 flex items-center justify-between">
+          <span>當前頁面最高 BST</span>
+          <i class="fa-solid fa-trophy text-amber-400"></i>
+        </div>
+        <div id="stat-max-bst" class="text-2xl font-bold text-amber-300 mt-1">--</div>
+        <div id="stat-max-pokemon" class="text-[11px] text-slate-400 mt-0.5 truncate">無數據</div>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur">
+        <div class="text-xs font-medium text-slate-400 flex items-center justify-between">
+          <span>快取記憶體</span>
+          <i class="fa-solid fa-bolt text-cyan-400"></i>
+        </div>
+        <div id="stat-cache-count" class="text-2xl font-bold text-cyan-400 mt-1">0</div>
+        <div class="text-[11px] text-slate-500 mt-0.5">已快取以降低 API 負擔</div>
+      </div>
+    </section>
+
+    <!-- Filter and Search Toolbar -->
+    <section class="bg-slate-900/80 p-5 rounded-2xl border border-slate-800 space-y-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+        
+        <!-- Search Input -->
+        <div class="lg:col-span-5 relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+          <input type="text" id="search-input" placeholder="搜尋寶可夢名稱或圖鑑編號 (如: pikachu 或 25)..."
+                 class="w-full pl-11 pr-10 py-3 bg-slate-950/70 border border-slate-700/80 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all">
+          <button id="clear-search-btn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 p-1">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Type Filter Dropdown -->
+        <div class="lg:col-span-3">
+          <select id="type-select" class="w-full py-3 px-4 bg-slate-950/70 border border-slate-700/80 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-rose-500 transition-all cursor-pointer">
+            <option value="all">🎨 所有屬性 (All Types)</option>
+            <option value="fire">🔥 火 (Fire)</option>
+            <option value="water">💧 水 (Water)</option>
+            <option value="grass">🍃 草 (Grass)</option>
+            <option value="electric">⚡ 電 (Electric)</option>
+            <option value="psychic">🔮 超能力 (Psychic)</option>
+            <option value="ice">❄️ 冰 (Ice)</option>
+            <option value="dragon">🐉 龍 (Dragon)</option>
+            <option value="dark">🌙 惡 (Dark)</option>
+            <option value="fairy">✨ 妖精 (Fairy)</option>
+            <option value="fighting">🥊 格鬥 (Fighting)</option>
+            <option value="flying">🕊️ 飛行 (Flying)</option>
+            <option value="poison">☠️ 毒 (Poison)</option>
+            <option value="ground">🏜️ 地面 (Ground)</option>
+            <option value="rock">🪨 岩石 (Rock)</option>
+            <option value="bug">🐛 蟲 (Bug)</option>
+            <option value="ghost">👻 幽靈 (Ghost)</option>
+            <option value="steel">🛡️ 鋼 (Steel)</option>
+            <option value="normal">⚪ 一般 (Normal)</option>
+          </select>
+        </div>
+
+        <!-- Sort By Dropdown -->
+        <div class="lg:col-span-2">
+          <select id="sort-select" class="w-full py-3 px-4 bg-slate-950/70 border border-slate-700/80 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-rose-500 transition-all cursor-pointer">
+            <option value="id-asc">🔢 編號小至大</option>
+            <option value="id-desc">🔢 編號大至小</option>
+            <option value="stat-desc">🏆 種族值高至低</option>
+            <option value="name-asc">🔤 名稱 A-Z</option>
+          </select>
+        </div>
+
+        <!-- Limit Selector -->
+        <div class="lg:col-span-2">
+          <select id="limit-select" class="w-full py-3 px-4 bg-slate-950/70 border border-slate-700/80 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-rose-500 transition-all cursor-pointer">
+            <option value="24">每頁 24 隻</option>
+            <option value="48">每頁 48 隻</option>
+            <option value="96">每頁 96 隻</option>
+          </select>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Loading State Skeleton Container -->
+    <div id="skeleton-container" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <template id="skeleton-template">
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 space-y-4 animate-pulse">
+          <div class="flex justify-between items-center">
+            <div class="h-4 w-12 bg-slate-800 rounded"></div>
+            <div class="h-4 w-16 bg-slate-800 rounded-full"></div>
+          </div>
+          <div class="h-32 w-32 mx-auto bg-slate-800/60 rounded-full"></div>
+          <div class="h-5 w-3/4 mx-auto bg-slate-800 rounded"></div>
+          <div class="space-y-2 pt-2 border-t border-slate-800">
+            <div class="h-2 bg-slate-800 rounded"></div>
+            <div class="h-2 bg-slate-800 rounded w-5/6"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Error & Failure Banner Container -->
+    <div id="error-container" class="hidden my-12 p-8 rounded-3xl bg-rose-950/30 border border-rose-900/60 text-center max-w-xl mx-auto space-y-4 shadow-2xl backdrop-blur">
+      <div class="w-16 h-16 mx-auto rounded-full bg-rose-900/50 flex items-center justify-center text-rose-400 text-2xl">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div>
+        <h3 id="error-title" class="text-xl font-bold text-rose-200">無法獲取寶可夢資料</h3>
+        <p id="error-message" class="text-sm text-slate-300 mt-2 leading-relaxed">
+          PokeAPI 伺服器暫時沒有回應，或者連線逾時。
+        </p>
+      </div>
+      <div class="pt-2 flex justify-center space-x-3">
+        <button id="retry-btn" class="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm transition-all shadow-lg shadow-rose-900/40 flex items-center space-x-2 cursor-pointer">
+          <i class="fa-solid fa-rotate-right"></i>
+          <span>重新試行 (Retry)</span>
+        </button>
+      </div>
+      <div class="text-xs text-slate-400 pt-2 border-t border-rose-900/40">
+        來源 API：<code class="text-rose-300">https://pokeapi.co/api/v2/</code>
+      </div>
+    </div>
+
+    <!-- Main Pokemon Grid Container -->
+    <div id="pokemon-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <!-- Dynamic Pokemon Cards Injection -->
+    </div>
+
+    <!-- Pagination Controls -->
+    <div id="pagination-container" class="flex flex-col sm:flex-row items-center justify-between gap-4 py-6 border-t border-slate-800/80">
+      <div class="text-xs text-slate-400">
+        顯示第 <span id="page-start" class="text-white font-semibold">1</span> 至 <span id="page-end" class="text-white font-semibold">24</span> 項寶可夢
+      </div>
+      <div class="flex items-center space-x-2">
+        <button id="prev-btn" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-2 cursor-pointer">
+          <i class="fa-solid fa-chevron-left text-xs"></i>
+          <span>上一頁</span>
+        </button>
+        <span id="current-page-badge" class="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-rose-400">
+          Page 1
+        </span>
+        <button id="next-btn" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-2 cursor-pointer">
+          <span>下一頁</span>
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Pokemon Detail Modal Dialog -->
+  <div id="detail-modal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div id="modal-card" class="relative w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden transform transition-all scale-95 opacity-0 duration-300">
+      
+      <!-- Close Button -->
+      <button id="close-modal-btn" class="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-slate-950/60 hover:bg-slate-800 text-slate-300 flex items-center justify-center transition-all cursor-pointer">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <!-- Modal Hero Header with Dynamic Type Colors -->
+      <div id="modal-header-bg" class="p-8 pb-4 bg-gradient-to-b from-rose-950/80 to-slate-900 relative">
+        <div class="flex items-center justify-between">
+          <span id="modal-dex-id" class="text-sm font-mono font-bold px-3 py-1 bg-black/40 rounded-full text-slate-300 border border-white/10">#000</span>
+          <div id="modal-types" class="flex space-x-2"></div>
+        </div>
+
+        <!-- Pokemon Artwork Preview -->
+        <div class="relative py-4 flex justify-center">
+          <div class="absolute inset-0 flex items-center justify-center blur-2xl opacity-40">
+            <div id="modal-glow-circle" class="w-48 h-48 rounded-full bg-rose-500"></div>
+          </div>
+          <img id="modal-image" src="" alt="Pokemon" class="relative z-10 w-48 h-48 object-contain filter drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)]">
+        </div>
+
+        <div class="text-center space-y-1">
+          <h2 id="modal-name" class="text-3xl font-extrabold text-white capitalize">--</h2>
+          <p id="modal-genus" class="text-xs text-rose-400 font-medium tracking-wide">--</p>
+        </div>
+      </div>
+
+      <!-- Modal Body Specs -->
+      <div class="p-6 space-y-6">
+        
+        <!-- Physical Traits Pill -->
+        <div class="grid grid-cols-3 gap-3 p-3 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-center">
+          <div>
+            <div class="text-[11px] text-slate-400">身高 (Height)</div>
+            <div id="modal-height" class="text-sm font-bold text-slate-100 mt-0.5">-- m</div>
+          </div>
+          <div class="border-x border-slate-800">
+            <div class="text-[11px] text-slate-400">體重 (Weight)</div>
+            <div id="modal-weight" class="text-sm font-bold text-slate-100 mt-0.5">-- kg</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-400">基礎經驗 (EXP)</div>
+            <div id="modal-exp" class="text-sm font-bold text-emerald-400 mt-0.5">--</div>
+          </div>
+        </div>
+
+        <!-- Flavor Description Text -->
+        <div class="p-4 rounded-xl bg-slate-950/40 border border-slate-800/50">
+          <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">圖鑑說明 (Flavor Text)</h4>
+          <p id="modal-flavor" class="text-sm text-slate-300 leading-relaxed italic">
+            載入資料中...
+          </p>
+        </div>
+
+        <!-- Base Stats Bar Graph -->
+        <div>
+          <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex justify-between">
+            <span>基礎能力值 (Base Stats)</span>
+            <span id="modal-bst-total" class="text-rose-400">BST: 0</span>
+          </h4>
+          <div id="modal-stats-container" class="space-y-2.5">
+            <!-- Stats Bars injected via JS -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-4 bg-slate-950/80 border-t border-slate-800/80 flex justify-between items-center text-xs text-slate-400">
+        <span>資料檢索: PokeAPI v2</span>
+        <button id="modal-cry-btn" class="px-3.5 py-1.5 rounded-lg bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/40 text-rose-300 transition-colors flex items-center space-x-1.5 cursor-pointer">
+          <i class="fa-solid fa-volume-high"></i>
+          <span>播放叫聲 (Cry)</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer Section -->
+  <footer class="mt-auto border-t border-slate-800/80 bg-slate-950 py-6 text-center text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 space-y-2">
+      <p>本專案串接公開資料集 API：<a href="https://pokeapi.co/" target="_blank" class="text-rose-400 hover:underline">PokeAPI (RESTful Pokémon API)</a></p>
+      <p class="text-slate-500">Pokémon and Pokémon character names are trademarks of Nintendo, Creatures Inc., and GAME FREAK inc.</p>
+    </div>
+  </footer>
+
+  <script>
+    const POKEAPI_BASE = 'https://pokeapi.co/api/v2';
+    const FALLBACK_IMAGE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/0.png';
+
+    // Type Color Mapping Configuration
+    const TYPE_COLORS = {
+      normal: { bg: 'bg-amber-800/60', text: 'text-amber-200', border: 'border-amber-700/50', hex: '#A8A878' },
+      fire: { bg: 'bg-amber-600/60', text: 'text-amber-200', border: 'border-amber-500/50', hex: '#F08030' },
+      water: { bg: 'bg-blue-600/60', text: 'text-blue-200', border: 'border-blue-500/50', hex: '#6890F0' },
+      electric: { bg: 'bg-yellow-500/60', text: 'text-yellow-100', border: 'border-yellow-400/50', hex: '#F8D030' },
+      grass: { bg: 'bg-emerald-600/60', text: 'text-emerald-200', border: 'border-emerald-500/50', hex: '#78C850' },
+      ice: { bg: 'bg-cyan-600/60', text: 'text-cyan-200', border: 'border-cyan-500/50', hex: '#98D8D8' },
+      fighting: { bg: 'bg-red-700/60', text: 'text-red-200', border: 'border-red-600/50', hex: '#C03028' },
+      poison: { bg: 'bg-purple-600/60', text: 'text-purple-200', border: 'border-purple-500/50', hex: '#A040A0' },
+      ground: { bg: 'bg-yellow-700/60', text: 'text-yellow-200', border: 'border-yellow-600/50', hex: '#E0C068' },
+      flying: { bg: 'bg-indigo-600/60', text: 'text-indigo-200', border: 'border-indigo-500/50', hex: '#A890F0' },
+      psychic: { bg: 'bg-pink-600/60', text: 'text-pink-200', border: 'border-pink-500/50', hex: '#F85888' },
+      bug: { bg: 'bg-lime-600/60', text: 'text-lime-200', border: 'border-lime-500/50', hex: '#A8B820' },
+      rock: { bg: 'bg-amber-900/60', text: 'text-amber-300', border: 'border-amber-800/50', hex: '#B8A038' },
+      ghost: { bg: 'bg-purple-900/60', text: 'text-purple-300', border: 'border-purple-800/50', hex: '#705898' },
+      dragon: { bg: 'bg-violet-700/60', text: 'text-violet-200', border: 'border-violet-600/50', hex: '#7038F8' },
+      dark: { bg: 'bg-stone-800/80', text: 'text-stone-300', border: 'border-stone-700/50', hex: '#705848' },
+      steel: { bg: 'bg-slate-600/60', text: 'text-slate-200', border: 'border-slate-500/50', hex: '#B8B8D0' },
+      fairy: { bg: 'bg-rose-500/60', text: 'text-rose-100', border: 'border-rose-400/50', hex: '#EE99AC' }
+    };
+
+    const STAT_NAMES = {
+      'hp': 'HP 生命值',
+      'attack': 'ATK 攻擊力',
+      'defense': 'DEF 防禦力',
+      'special-attack': 'SPA 特攻',
+      'special-defense': 'SPD 特防',
+      'speed': 'SPE 速度'
+    };
+
+    const state = {
+      pokemonList: [],
+      rawList: [],
+      pokemonCache: new Map(),
+      typeCache: new Map(),
+      currentPage: 1,
+      itemsPerPage: 24,
+      totalCount: 0,
+      activeType: 'all',
+      searchQuery: '',
+      sortBy: 'id-asc',
+      isLoading: false,
+      activeAudio: null
+    };
+
+    const DOM = {
+      grid: document.getElementById('pokemon-grid'),
+      skeletonContainer: document.getElementById('skeleton-container'),
+      skeletonTemplate: document.getElementById('skeleton-template'),
+      errorContainer: document.getElementById('error-container'),
+      errorTitle: document.getElementById('error-title'),
+      errorMessage: document.getElementById('error-message'),
+      retryBtn: document.getElementById('retry-btn'),
+      
+      searchInput: document.getElementById('search-input'),
+      clearSearchBtn: document.getElementById('clear-search-btn'),
+      typeSelect: document.getElementById('type-select'),
+      sortSelect: document.getElementById('sort-select'),
+      limitSelect: document.getElementById('limit-select'),
+
+      prevBtn: document.getElementById('prev-btn'),
+      nextBtn: document.getElementById('next-btn'),
+      pageStart: document.getElementById('page-start'),
+      pageEnd: document.getElementById('page-end'),
+      currentPageBadge: document.getElementById('current-page-badge'),
+
+      statTotalCount: document.getElementById('stat-total-count'),
+      statActiveType: document.getElementById('stat-active-type'),
+      statMaxBst: document.getElementById('stat-max-bst'),
+      statMaxPokemon: document.getElementById('stat-max-pokemon'),
+      statCacheCount: document.getElementById('stat-cache-count'),
+      apiStatusPill: document.getElementById('api-status-pill'),
+      apiStatusText: document.getElementById('api-status-text'),
+
+      modal: document.getElementById('detail-modal'),
+      modalCard: document.getElementById('modal-card'),
+      closeModalBtn: document.getElementById('close-modal-btn'),
+      modalDexId: document.getElementById('modal-dex-id'),
+      modalTypes: document.getElementById('modal-types'),
+      modalImage: document.getElementById('modal-image'),
+      modalName: document.getElementById('modal-name'),
+      modalGenus: document.getElementById('modal-genus'),
+      modalHeight: document.getElementById('modal-height'),
+      modalWeight: document.getElementById('modal-weight'),
+      modalExp: document.getElementById('modal-exp'),
+      modalFlavor: document.getElementById('modal-flavor'),
+      modalStatsContainer: document.getElementById('modal-stats-container'),
+      modalBstTotal: document.getElementById('modal-bst-total'),
+      modalCryBtn: document.getElementById('modal-cry-btn'),
+      modalGlowCircle: document.getElementById('modal-glow-circle')
+    };
+
+    async function fetchWithTimeout(url, options = {}, timeout = 8000) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeout);
+
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+
+        if (!response.ok) {
+          if (response.status === 404) throw new Error('找不到該項目 (404 Not Found)');
+          if (response.status === 429) throw new Error('請求頻率過高 (429 Rate Limited)');
+          throw new Error(`伺服器回應錯誤 (${response.status})`);
+        }
+        return await response.json();
+      } catch (err) {
+        clearTimeout(id);
+        if (err.name === 'AbortError') throw new Error('網路連線逾時 (Request Timeout)');
+        throw err;
+      }
+    }
+
+    async function fetchPokemonBatch(items) {
+      const fetchPromises = items.map(async (item) => {
+        const idOrName = item.name || item.id;
+
+        if (state.pokemonCache.has(idOrName)) {
+          return state.pokemonCache.get(idOrName);
+        }
+
+        const data = await fetchWithTimeout(`${POKEAPI_BASE}/pokemon/${idOrName}`);
+        
+        const pokemon = {
+          id: data.id,
+          name: data.name,
+          height: data.height / 10,
+          weight: data.weight / 10,
+          baseExperience: data.base_experience || 0,
+          types: data.types.map(t => t.type.name),
+          stats: data.stats.map(s => ({
+            name: s.stat.name,
+            value: s.base_stat
+          })),
+          bst: data.stats.reduce((sum, s) => sum + s.base_stat, 0),
+          image: data.sprites?.other?.['official-artwork']?.front_default || 
+                 data.sprites?.front_default || 
+                 FALLBACK_IMAGE,
+          cryUrl: data.cries?.latest || data.cries?.legacy || null,
+          speciesUrl: data.species?.url
+        };
+
+        state.pokemonCache.set(data.id, pokemon);
+        state.pokemonCache.set(data.name, pokemon);
+        updateCacheCountStat();
+
+        return pokemon;
+      });
+
+      const results = await Promise.allSettled(fetchPromises);
+      return results.filter(res => res.status === 'fulfilled' && res.value).map(res => res.value);
+    }
+
+    async function loadDashboardData() {
+      showLoading(true);
+      hideError();
+
+      try {
+        let candidateList = [];
+
+        if (state.activeType !== 'all') {
+          if (!state.typeCache.has(state.activeType)) {
+            const typeData = await fetchWithTimeout(`${POKEAPI_BASE}/type/${state.activeType}`);
+            const list = typeData.pokemon.map(p => ({
+              name: p.pokemon.name,
+              url: p.pokemon.url
+            }));
+            state.typeCache.set(state.activeType, list);
+          }
+          candidateList = state.typeCache.get(state.activeType);
+        } else {
+          if (state.rawList.length === 0) {
+            const listData = await fetchWithTimeout(`${POKEAPI_BASE}/pokemon?limit=1025&offset=0`);
+            state.rawList = listData.results;
+          }
+          candidateList = state.rawList;
+        }
+
+        if (state.searchQuery.trim() !== '') {
+          const q = state.searchQuery.toLowerCase().trim();
+          candidateList = candidateList.filter(item => {
+            const nameMatch = item.name.toLowerCase().includes(q);
+            const matches = item.url ? item.url.match(/\/pokemon\/(\d+)\//) : null;
+            const idMatch = matches ? matches[1] === q : false;
+            return nameMatch || idMatch;
+          });
+        }
+
+        state.totalCount = candidateList.length;
+
+        if (candidateList.length === 0) {
+          renderEmptyState();
+          showLoading(false);
+          updateSummaryStats([]);
+          return;
+        }
+
+        const totalPages = Math.ceil(state.totalCount / state.itemsPerPage);
+        if (state.currentPage > totalPages) state.currentPage = 1;
+
+        const startIndex = (state.currentPage - 1) * state.itemsPerPage;
+        const endIndex = Math.min(startIndex + state.itemsPerPage, state.totalCount);
+        const pageItems = candidateList.slice(startIndex, endIndex);
+
+        DOM.pageStart.textContent = state.totalCount === 0 ? 0 : startIndex + 1;
+        DOM.pageEnd.textContent = endIndex;
+        DOM.currentPageBadge.textContent = `第 ${state.currentPage} 頁 / 共 ${totalPages || 1} 頁`;
+        DOM.prevBtn.disabled = state.currentPage <= 1;
+        DOM.nextBtn.disabled = state.currentPage >= totalPages || totalPages === 0;
+
+        const detailedList = await fetchPokemonBatch(pageItems);
+        sortPokemonList(detailedList);
+        renderGrid(detailedList);
+        updateSummaryStats(detailedList);
+        setApiStatus('online');
+
+      } catch (err) {
+        console.error('Data loading error:', err);
+        showError('資料讀取失敗', err.message || '無法取得 PokeAPI 資料，請確認網路連線。');
+        setApiStatus('error');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function sortPokemonList(list) {
+      switch (state.sortBy) {
+        case 'id-asc': list.sort((a, b) => a.id - b.id); break;
+        case 'id-desc': list.sort((a, b) => b.id - a.id); break;
+        case 'stat-desc': list.sort((a, b) => b.bst - a.bst); break;
+        case 'name-asc': list.sort((a, b) => a.name.localeCompare(b.name)); break;
+      }
+    }
+
+    function renderGrid(pokemonList) {
+      DOM.grid.innerHTML = '';
+
+      pokemonList.forEach(poke => {
+        const card = document.createElement('div');
+        card.className = 'group relative bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-600 rounded-2xl p-5 cursor-pointer transition-all duration-300 transform hover:-translate-y-1.5 card-glow flex flex-col justify-between';
+        
+        const formattedId = `#${poke.id.toString().padStart(4, '0')}`;
+        const typePills = poke.types.map(t => {
+          const cfg = TYPE_COLORS[t] || { bg: 'bg-slate-700', text: 'text-slate-200', border: 'border-slate-600' };
+          return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${cfg.bg} ${cfg.text} border ${cfg.border} capitalize">${t}</span>`;
+        }).join(' ');
+
+        const primaryType = poke.types[0];
+        const typeHex = TYPE_COLORS[primaryType]?.hex || '#EE1515';
+
+        card.innerHTML = `
+          <div class="flex items-center justify-between z-10">
+            <span class="font-mono text-xs font-bold text-slate-400 bg-slate-950/60 px-2.5 py-1 rounded-md border border-slate-800">${formattedId}</span>
+            <div class="flex space-x-1">${typePills}</div>
+          </div>
+
+          <div class="relative py-6 my-2 flex items-center justify-center">
+            <div class="absolute w-28 h-28 rounded-full opacity-20 group-hover:opacity-40 transition-opacity duration-300 blur-xl" style="background-color: ${typeHex}"></div>
+            <img src="${poke.image}" alt="${poke.name}" loading="lazy" onerror="this.onerror=null; this.src='${FALLBACK_IMAGE}';"
+                 class="relative z-10 w-32 h-32 object-contain transform group-hover:scale-110 transition-transform duration-300 filter drop-shadow-md">
+          </div>
+
+          <div class="space-y-3 z-10">
+            <h3 class="text-lg font-bold text-white group-hover:text-rose-400 capitalize transition-colors text-center truncate">${poke.name}</h3>
+            
+            <div class="pt-3 border-t border-slate-800/80 text-xs space-y-1.5">
+              <div class="flex justify-between items-center text-slate-400">
+                <span>HP 生命</span>
+                <span class="font-bold text-slate-200">${getPokeStat(poke, 'hp')}</span>
+              </div>
+              <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-emerald-500 h-full rounded-full" style="width: ${Math.min(100, (getPokeStat(poke, 'hp') / 180) * 100)}%"></div>
+              </div>
+
+              <div class="flex justify-between items-center text-slate-400 pt-1">
+                <span>種族值總合 (BST)</span>
+                <span class="font-bold text-amber-400">${poke.bst}</span>
+              </div>
+            </div>
+          </div>
+        `;
+
+        card.addEventListener('click', () => openModal(poke));
+        DOM.grid.appendChild(card);
+      });
+    }
+
+    function getPokeStat(poke, statName) {
+      const found = poke.stats.find(s => s.name === statName);
+      return found ? found.value : 0;
+    }
+
+    function renderEmptyState() {
+      DOM.grid.innerHTML = `
+        <div class="col-span-full my-12 p-8 text-center bg-slate-900/40 border border-slate-800 rounded-3xl space-y-3">
+          <div class="text-4xl">🔍</div>
+          <h3 class="text-lg font-bold text-slate-200">未找到符合條件的寶可夢</h3>
+          <p class="text-xs text-slate-400">請嘗試更換搜尋關鍵字，或者清空屬性篩選條件。</p>
+        </div>
+      `;
+    }
+
+    async function openModal(pokemon) {
+      DOM.modalDexId.textContent = `#${pokemon.id.toString().padStart(4, '0')}`;
+      DOM.modalName.textContent = pokemon.name;
+      DOM.modalHeight.textContent = `${pokemon.height} m`;
+      DOM.modalWeight.textContent = `${pokemon.weight} kg`;
+      DOM.modalExp.textContent = pokemon.baseExperience;
+      DOM.modalBstTotal.textContent = `BST 總和: ${pokemon.bst}`;
+      DOM.modalImage.src = pokemon.image;
+
+      if (pokemon.cryUrl) {
+        DOM.modalCryBtn.classList.remove('hidden');
+        DOM.modalCryBtn.onclick = () => playCry(pokemon.cryUrl);
+      } else {
+        DOM.modalCryBtn.classList.add('hidden');
+      }
+
+      DOM.modalTypes.innerHTML = pokemon.types.map(t => {
+        const cfg = TYPE_COLORS[t] || { bg: 'bg-slate-700', text: 'text-slate-200' };
+        return `<span class="px-3 py-1 rounded-full text-xs font-bold ${cfg.bg} ${cfg.text} capitalize">${t}</span>`;
+      }).join(' ');
+
+      const primaryType = pokemon.types[0];
+      DOM.modalGlowCircle.style.backgroundColor = TYPE_COLORS[primaryType]?.hex || '#EE1515';
+
+      DOM.modalStatsContainer.innerHTML = pokemon.stats.map(s => {
+        const label = STAT_NAMES[s.name] || s.name.toUpperCase();
+        const percent = Math.min(100, Math.round((s.value / 200) * 100));
+        let barColor = 'bg-rose-500';
+        if (s.name === 'hp') barColor = 'bg-emerald-500';
+        if (s.name === 'attack') barColor = 'bg-amber-500';
+        if (s.name === 'defense') barColor = 'bg-blue-500';
+        if (s.name === 'speed') barColor = 'bg-cyan-400';
+
+        return `
+          <div>
+            <div class="flex justify-between text-xs font-medium mb-1">
+              <span class="text-slate-400">${label}</span>
+              <span class="text-slate-200 font-bold">${s.value}</span>
+            </div>
+            <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+              <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      DOM.modalFlavor.textContent = '載入圖鑑說明中...';
+      DOM.modalGenus.textContent = 'Pokémon';
+
+      try {
+        if (pokemon.speciesUrl) {
+          const speciesData = await fetchWithTimeout(pokemon.speciesUrl);
+          const flavorEntry = speciesData.flavor_text_entries.find(e => e.language.name === 'zh-Hant') || 
+                              speciesData.flavor_text_entries.find(e => e.language.name === 'en');
+          
+          DOM.modalFlavor.textContent = flavorEntry ? flavorEntry.flavor_text.replace(/[\n\f]/g, ' ') : '暫無說明';
+
+          const genusEntry = speciesData.genera.find(g => g.language.name === 'zh-Hant') ||
+                             speciesData.genera.find(g => g.language.name === 'en');
+          if (genusEntry) DOM.modalGenus.textContent = genusEntry.genus;
+        }
+      } catch (err) {
+        DOM.modalFlavor.textContent = '無法獲取詳細圖鑑描述。';
+      }
+
+      DOM.modal.classList.remove('hidden');
+      setTimeout(() => {
+        DOM.modalCard.classList.remove('scale-95', 'opacity-0');
+        DOM.modalCard.classList.add('scale-100', 'opacity-100');
+      }, 10);
+    }
+
+    function closeModal() {
+      DOM.modalCard.classList.remove('scale-100', 'opacity-100');
+      DOM.modalCard.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => DOM.modal.classList.add('hidden'), 300);
+    }
+
+    function playCry(audioUrl) {
+      if (state.activeAudio) state.activeAudio.pause();
+      state.activeAudio = new Audio(audioUrl);
+      state.activeAudio.volume = 0.5;
+      state.activeAudio.play().catch(e => console.log('Audio playback error:', e));
+    }
+
+    function showLoading(isLoading) {
+      state.isLoading = isLoading;
+      if (isLoading) {
+        DOM.grid.classList.add('hidden');
+        DOM.skeletonContainer.classList.remove('hidden');
+        buildSkeletons();
+      } else {
+        DOM.skeletonContainer.classList.add('hidden');
+        DOM.grid.classList.remove('hidden');
+      }
+    }
+
+    function buildSkeletons() {
+      DOM.skeletonContainer.innerHTML = '';
+      const count = state.itemsPerPage > 24 ? 12 : 8;
+      for (let i = 0; i < count; i++) {
+        const clone = DOM.skeletonTemplate.content.cloneNode(true);
+        DOM.skeletonContainer.appendChild(clone);
+      }
+    }
+
+    function showError(title, message) {
+      DOM.errorTitle.textContent = title;
+      DOM.errorMessage.textContent = message;
+      DOM.errorContainer.classList.remove('hidden');
+      DOM.grid.classList.add('hidden');
+    }
+
+    function hideError() {
+      DOM.errorContainer.classList.add('hidden');
+    }
+
+    function updateSummaryStats(currentDisplayedList) {
+      DOM.statTotalCount.textContent = state.totalCount.toLocaleString();
+      DOM.statActiveType.textContent = state.activeType === 'all' ? '全部 (18)' : state.activeType.toUpperCase();
+
+      if (currentDisplayedList && currentDisplayedList.length > 0) {
+        const highestBstPoke = [...currentDisplayedList].sort((a, b) => b.bst - a.bst)[0];
+        DOM.statMaxBst.textContent = highestBstPoke.bst;
+        DOM.statMaxPokemon.textContent = `${highestBstPoke.name} (#${highestBstPoke.id})`;
+      } else {
+        DOM.statMaxBst.textContent = '--';
+        DOM.statMaxPokemon.textContent = '無資料';
+      }
+    }
+
+    function updateCacheCountStat() {
+      DOM.statCacheCount.textContent = state.pokemonCache.size;
+    }
+
+    function setApiStatus(status) {
+      if (status === 'online') {
+        DOM.apiStatusPill.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full bg-emerald-950/50 border border-emerald-800/50 text-xs text-emerald-300';
+        DOM.apiStatusText.textContent = 'API 連線正常';
+      } else {
+        DOM.apiStatusPill.className = 'flex items-center space-x-2 px-3 py-1.5 rounded-full bg-rose-950/50 border border-rose-800/50 text-xs text-rose-300';
+        DOM.apiStatusText.textContent = 'API 連線異常';
+      }
+    }
+
+    let searchDebounceTimer = null;
+
+    function setupEventListeners() {
+      DOM.searchInput.addEventListener('input', (e) => {
+        const val = e.target.value;
+        DOM.clearSearchBtn.classList.toggle('hidden', !val.trim());
+
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+          state.searchQuery = val;
+          state.currentPage = 1;
+          loadDashboardData();
+        }, 400);
+      });
+
+      DOM.clearSearchBtn.addEventListener('click', () => {
+        DOM.searchInput.value = '';
+        DOM.clearSearchBtn.classList.add('hidden');
+        state.searchQuery = '';
+        state.currentPage = 1;
+        loadDashboardData();
+      });
+
+      DOM.typeSelect.addEventListener('change', (e) => {
+        state.activeType = e.target.value;
+        state.currentPage = 1;
+        loadDashboardData();
+      });
+
+      DOM.sortSelect.addEventListener('change', (e) => {
+        state.sortBy = e.target.value;
+        loadDashboardData();
+      });
+
+      DOM.limitSelect.addEventListener('change', (e) => {
+        state.itemsPerPage = parseInt(e.target.value, 10);
+        state.currentPage = 1;
+        loadDashboardData();
+      });
+
+      DOM.prevBtn.addEventListener('click', () => {
+        if (state.currentPage > 1) {
+          state.currentPage--;
+          loadDashboardData();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+
+      DOM.nextBtn.addEventListener('click', () => {
+        state.currentPage++;
+        loadDashboardData();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      DOM.retryBtn.addEventListener('click', () => loadDashboardData());
+      DOM.closeModalBtn.addEventListener('click', closeModal);
+      DOM.modal.addEventListener('click', (e) => { if (e.target === DOM.modal) closeModal(); });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !DOM.modal.classList.contains('hidden')) closeModal();
+      });
+
+      window.addEventListener('offline', () => {
+        setApiStatus('error');
+        showError('網路中斷連線', '請檢查您的網絡連線狀況，恢復連線後點擊重新試行。');
+      });
+
+      window.addEventListener('online', () => {
+        setApiStatus('online');
+        hideError();
+        loadDashboardData();
+      });
+    }
+
+    window.onload = function() {
+      setupEventListeners();
+      loadDashboardData();
+    };
+  </script>
+</body>
+</html>
